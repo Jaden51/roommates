@@ -85,8 +85,9 @@ class SetupCog(commands.Cog):
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @setup.error
-    async def on_setup_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def cog_app_command_error(
+        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+    ) -> None:
         if isinstance(error, app_commands.MissingPermissions):
             await interaction.response.send_message(
                 "You need the **Manage Server** permission to use this command.",

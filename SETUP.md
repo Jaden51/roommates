@@ -23,9 +23,12 @@ How to get the bot running.
 
 ## 4. Install and run
 
+Uses a virtual environment (system Python may be externally managed):
+
 ```bash
-pip install -r requirements.txt
-python bot.py
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python bot.py
 ```
 
 Notes:
