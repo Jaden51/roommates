@@ -76,7 +76,8 @@ CREATE TABLE IF NOT EXISTS expenses (
     status       TEXT NOT NULL DEFAULT 'pending'
                  CHECK (status IN ('pending', 'approved', 'rejected')),
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-    message_id   INTEGER  -- Discord message holding the approval buttons
+    message_id   INTEGER,  -- Discord message holding the approval buttons
+    required_voters TEXT NOT NULL DEFAULT '[]'  -- JSON array of member ids who must approve
 );
 
 CREATE TABLE IF NOT EXISTS expense_approvals (
