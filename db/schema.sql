@@ -34,25 +34,26 @@ CREATE TABLE IF NOT EXISTS split_configs (
 CREATE TABLE IF NOT EXISTS split_shares (
     config_id     INTEGER NOT NULL REFERENCES split_configs(id) ON DELETE CASCADE,
     member_id     INTEGER NOT NULL REFERENCES members(id),
-    share_percent INTEGER NOT NULL CHECK (share_percent > 0),
+    share_percent REAL NOT NULL CHECK (share_percent > 0),
     PRIMARY KEY (config_id, member_id)
 );
 
 -- Pending split-change proposals, approved via the same all-members flow.
 CREATE TABLE IF NOT EXISTS split_proposals (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id    INTEGER NOT NULL REFERENCES guilds(guild_id) ON DELETE CASCADE,
-    proposed_by INTEGER NOT NULL REFERENCES members(id),
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    status      TEXT NOT NULL DEFAULT 'pending'
-                CHECK (status IN ('pending', 'approved', 'rejected')),
-    config_id   INTEGER REFERENCES split_configs(id)
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id        INTEGER NOT NULL REFERENCES guilds(guild_id) ON DELETE CASCADE,
+    proposed_by     INTEGER NOT NULL REFERENCES members(id),
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    status          TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'approved', 'rejected')),
+    config_id       INTEGER REFERENCES split_configs(id),
+    required_voters TEXT NOT NULL DEFAULT '[]'  -- JSON member ids who must approve
 );
 
 CREATE TABLE IF NOT EXISTS split_proposal_shares (
     proposal_id   INTEGER NOT NULL REFERENCES split_proposals(id) ON DELETE CASCADE,
     member_id     INTEGER NOT NULL REFERENCES members(id),
-    share_percent INTEGER NOT NULL CHECK (share_percent > 0),
+    share_percent REAL NOT NULL CHECK (share_percent > 0),
     PRIMARY KEY (proposal_id, member_id)
 );
 
@@ -77,7 +78,8 @@ CREATE TABLE IF NOT EXISTS expenses (
                  CHECK (status IN ('pending', 'approved', 'rejected')),
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
     message_id   INTEGER,  -- Discord message holding the approval buttons
-    required_voters TEXT NOT NULL DEFAULT '[]'  -- JSON array of member ids who must approve
+    required_voters TEXT NOT NULL DEFAULT '[]',  -- JSON member ids who must approve
+    split_config_id INTEGER REFERENCES split_configs(id)  -- split in effect when approved
 );
 
 CREATE TABLE IF NOT EXISTS expense_approvals (

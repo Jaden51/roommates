@@ -3,6 +3,7 @@ import json
 import discord
 
 import db.database as db
+from services.splits import get_active_config
 from util import format_money
 
 APPROVE_PREFIX = "expense_approve"
@@ -151,6 +152,13 @@ class ExpenseApprovalView(discord.ui.View):
             await conn.execute(
                 "UPDATE expenses SET status = ? WHERE id = ?", (status, self.expense_id)
             )
+            if status == "approved":
+                config = await get_active_config(exp["guild_id"])
+                if config is not None:
+                    await conn.execute(
+                        "UPDATE expenses SET split_config_id = ? WHERE id = ?",
+                        (config["id"], self.expense_id),
+                    )
             for item in self.children:
                 item.disabled = True
         await conn.commit()

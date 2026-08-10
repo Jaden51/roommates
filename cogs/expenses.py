@@ -6,12 +6,14 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from cogs._common import GuildCommandsMixin
 import db.database as db
+from services.splits import get_active_config
 from util import format_money, to_cents
 from views.approval import ExpenseApprovalView, build_expense_embed, fetch_expense
 
 
-class ExpensesCog(commands.Cog):
+class ExpensesCog(GuildCommandsMixin, commands.Cog):
     """Expense categories and shared-expense tracking with approval flow."""
 
     def __init__(self, bot: commands.Bot) -> None:
@@ -19,24 +21,6 @@ class ExpensesCog(commands.Cog):
 
     category = app_commands.Group(name="category", description="Manage expense categories.")
     expense = app_commands.Group(name="expense", description="Track shared expenses.")
-
-    async def _register(self, interaction: discord.Interaction) -> int:
-        return await db.ensure_member(
-            interaction.guild_id, interaction.user.id, interaction.user.display_name
-        )
-
-    async def _channel(self, interaction: discord.Interaction) -> discord.abc.Messageable:
-        guild = await db.get_guild_config(interaction.guild_id)
-        if guild["channel_id"]:
-            channel = interaction.guild.get_channel(guild["channel_id"])
-            if channel is not None:
-                return channel
-        return interaction.channel
-
-    async def _month_key(self, interaction: discord.Interaction) -> str:
-        guild = await db.get_guild_config(interaction.guild_id)
-        now = datetime.datetime.now(ZoneInfo(guild["timezone"]))
-        return now.strftime("%Y-%m")
 
     @category.command(name="add", description="Create a new expense category.")
     @app_commands.describe(name="Category name, e.g. Groceries")
@@ -142,10 +126,12 @@ class ExpensesCog(commands.Cog):
 
         month_key = await self._month_key(interaction)
         status = "approved" if not required else "pending"
+        config = await get_active_config(interaction.guild_id)
+        split_config_id = config["id"] if (config is not None and status == "approved") else None
         cursor = await conn.execute(
             """
-            INSERT INTO expenses (guild_id, category_id, payer_id, amount_cents, note, month_key, status, required_voters)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO expenses (guild_id, category_id, payer_id, amount_cents, note, month_key, status, required_voters, split_config_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 interaction.guild_id,
@@ -156,6 +142,7 @@ class ExpensesCog(commands.Cog):
                 month_key,
                 status,
                 json.dumps(required),
+                split_config_id,
             ),
         )
         expense_id = cursor.lastrowid
@@ -186,6 +173,7 @@ class ExpensesCog(commands.Cog):
         await self._register(interaction)
         if month is None:
             month = await self._month_key(interaction)
+        assert month is not None
         try:
             datetime.datetime.strptime(month, "%Y-%m")
         except ValueError:
