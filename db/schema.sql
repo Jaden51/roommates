@@ -109,3 +109,11 @@ CREATE TABLE IF NOT EXISTS chore_occurrences (
     due_date TEXT NOT NULL,  -- 'YYYY-MM-DD'
     PRIMARY KEY (chore_id, due_date)
 );
+
+-- Auto-posted monthly statements, so the end-of-month statement posts once.
+CREATE TABLE IF NOT EXISTS posted_statements (
+    guild_id  INTEGER NOT NULL REFERENCES guilds(guild_id) ON DELETE CASCADE,
+    month_key TEXT NOT NULL,  -- 'YYYY-MM'
+    posted_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (guild_id, month_key)
+);
