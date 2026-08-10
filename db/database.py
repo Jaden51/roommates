@@ -31,6 +31,15 @@ async def init_schema() -> None:
     await conn.commit()
 
 
+async def get_guild_config(guild_id: int) -> aiosqlite.Row:
+    conn = await connect()
+    await ensure_guild(guild_id)
+    cursor = await conn.execute("SELECT * FROM guilds WHERE guild_id = ?", (guild_id,))
+    row = await cursor.fetchone()
+    assert row is not None
+    return row
+
+
 async def ensure_guild(guild_id: int, *, timezone: str | None = None) -> None:
     conn = await connect()
     await conn.execute(
