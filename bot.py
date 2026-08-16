@@ -23,6 +23,7 @@ COGS = [
 intents = discord.Intents.default()
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
+commands_synced = False
 
 
 @tasks.loop(hours=1)
@@ -55,11 +56,22 @@ async def _register_persistent_views() -> None:
 
 @bot.event
 async def on_ready() -> None:
+    global commands_synced
     logger.info("Logged in as %s (%s)", bot.user, bot.user.id)
     for guild in bot.guilds:
         await db.ensure_guild(guild.id)
-        await bot.tree.sync(guild=discord.Object(id=guild.id))
-    logger.info("Synced commands for %d guild(s)", len(bot.guilds))
+    if not commands_synced:
+        synced_count = 0
+        for guild in bot.guilds:
+            guild_obj = discord.Object(id=guild.id)
+            bot.tree.copy_global_to(guild=guild_obj)
+            try:
+                await bot.tree.sync(guild=guild_obj)
+                synced_count += 1
+            except Exception:
+                logger.exception("Failed syncing commands for guild %s", guild.id)
+        commands_synced = True
+        logger.info("Synced commands for %d/%d guild(s)", synced_count, len(bot.guilds))
     if not daily_scheduler.is_running():
         daily_scheduler.start()
 
