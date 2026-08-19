@@ -95,10 +95,12 @@ CREATE TABLE IF NOT EXISTS chores (
     guild_id     INTEGER NOT NULL REFERENCES guilds(guild_id) ON DELETE CASCADE,
     name         TEXT NOT NULL,
     created_by   INTEGER NOT NULL REFERENCES members(id),
-    freq         TEXT NOT NULL CHECK (freq IN ('weekly', 'monthly_nth', 'monthly_day')),
-    day_of_week  INTEGER,  -- 0=Mon..6=Sun; used by 'weekly' and 'monthly_nth'
+    freq         TEXT NOT NULL CHECK (freq IN ('weekly', 'biweekly', 'monthly_nth', 'monthly_day')),
+    day_of_week  INTEGER,  -- 0=Mon..6=Sun; used by 'weekly', 'biweekly' (every_other_weekday), and 'monthly_nth'
     nth          INTEGER,  -- 1..4, or -1 for last; used by 'monthly_nth'
     day_of_month INTEGER,  -- 1..31; used by 'monthly_day'
+    biweekly_mode TEXT CHECK (biweekly_mode IN ('every_14_days', 'every_other_weekday')),
+    start_date   TEXT,  -- 'YYYY-MM-DD'; used by 'biweekly'
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (guild_id, name)
 );

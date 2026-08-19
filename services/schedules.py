@@ -13,6 +13,14 @@ def describe_schedule(chore: aiosqlite.Row) -> str:
     freq = chore["freq"]
     if freq == "weekly":
         return f"Every {WEEKDAYS[chore['day_of_week']]}"
+    if freq == "biweekly":
+        mode = chore["biweekly_mode"]
+        start = chore["start_date"]
+        if mode == "every_14_days":
+            return f"Every 14 days from {start}"
+        if mode == "every_other_weekday":
+            return f"Every other {WEEKDAYS[chore['day_of_week']]} starting {start}"
+        return "Biweekly"
     if freq == "monthly_nth":
         nth = chore["nth"]
         word = "Last" if nth == -1 else NTH_WORDS[nth]
@@ -40,6 +48,27 @@ def nth_weekday(year: int, month: int, weekday: int, nth: int) -> datetime.date:
 def matches(chore: aiosqlite.Row, date: datetime.date) -> bool:
     if chore["freq"] == "weekly":
         return date.weekday() == chore["day_of_week"]
+    if chore["freq"] == "biweekly":
+        start = chore["start_date"]
+        if not start:
+            return False
+        try:
+            start_date = datetime.datetime.strptime(start, "%Y-%m-%d").date()
+        except ValueError:
+            return False
+        mode = chore["biweekly_mode"]
+        if mode == "every_14_days":
+            delta = (date - start_date).days
+            return delta >= 0 and delta % 14 == 0
+        if mode == "every_other_weekday":
+            if chore["day_of_week"] is None:
+                return False
+            first = start_date + datetime.timedelta(
+                days=(chore["day_of_week"] - start_date.weekday()) % 7
+            )
+            delta = (date - first).days
+            return date.weekday() == chore["day_of_week"] and delta >= 0 and delta % 14 == 0
+        return False
     if chore["freq"] == "monthly_nth":
         target = nth_weekday(date.year, date.month, chore["day_of_week"], chore["nth"])
         return date == target
