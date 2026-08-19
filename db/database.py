@@ -28,7 +28,65 @@ async def init_schema() -> None:
     conn = await connect()
     schema = (config.BASE_DIR / "db" / "schema.sql").read_text()
     await conn.executescript(schema)
+    await _migrate_chores_schema(conn)
     await conn.commit()
+
+
+async def _migrate_chores_schema(conn: aiosqlite.Connection) -> None:
+    cursor = await conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'chores'"
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return
+
+    sql = row["sql"] or ""
+    cursor = await conn.execute("PRAGMA table_info(chores)")
+    columns = {column["name"] for column in await cursor.fetchall()}
+    needs_migration = (
+        "biweekly_mode" not in columns
+        or "start_date" not in columns
+        or "'biweekly'" not in sql
+    )
+    if not needs_migration:
+        return
+
+    await conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        try:
+            await conn.execute("BEGIN")
+            await conn.execute(
+                """
+                CREATE TABLE chores_new (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id      INTEGER NOT NULL REFERENCES guilds(guild_id) ON DELETE CASCADE,
+                    name          TEXT NOT NULL,
+                    created_by    INTEGER NOT NULL REFERENCES members(id),
+                    freq          TEXT NOT NULL CHECK (freq IN ('weekly', 'biweekly', 'monthly_nth', 'monthly_day')),
+                    day_of_week   INTEGER,
+                    nth           INTEGER,
+                    day_of_month  INTEGER,
+                    biweekly_mode TEXT CHECK (biweekly_mode IN ('every_14_days', 'every_other_weekday')),
+                    start_date    TEXT,
+                    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                    UNIQUE (guild_id, name)
+                )
+                """
+            )
+            await conn.execute(
+                """
+                INSERT INTO chores_new (id, guild_id, name, created_by, freq, day_of_week, nth, day_of_month, created_at)
+                SELECT id, guild_id, name, created_by, freq, day_of_week, nth, day_of_month, created_at
+                FROM chores
+                """
+            )
+            await conn.execute("DROP TABLE chores")
+            await conn.execute("ALTER TABLE chores_new RENAME TO chores")
+        except Exception:
+            await conn.execute("ROLLBACK")
+            raise
+    finally:
+        await conn.execute("PRAGMA foreign_keys = ON")
 
 
 async def get_guild_config(guild_id: int) -> aiosqlite.Row:

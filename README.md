@@ -30,6 +30,7 @@ Built with Python, discord.py, and SQLite. Self-hosted on your own machine.
 
 - Create recurring chores with flexible schedules:
   - `Weekly` — every Sunday
+  - `Biweekly` — every 14 days from a start date, or every other selected weekday
   - `Monthly weekday` — first / second / ... / last Sunday of the month
   - `Monthly day` — on the 15th of every month
 - The bot posts a reminder on each due day in your chosen channel. Restart-safe, so no double reminders.

@@ -16,11 +16,16 @@ from services.schedules import (
 
 FREQ_MAP = {
     "Weekly": "weekly",
+    "Biweekly": "biweekly",
     "Monthly weekday": "monthly_nth",
     "Monthly day": "monthly_day",
 }
 WEEKDAY_MAP = {day: index for index, day in enumerate(WEEKDAYS)}
 NTH_MAP = {"First": 1, "Second": 2, "Third": 3, "Fourth": 4, "Last": -1}
+BIWEEKLY_MODE_MAP = {
+    "Every 14 days": "every_14_days",
+    "Every other weekday": "every_other_weekday",
+}
 
 
 class ChoresCog(GuildCommandsMixin, commands.Cog):
@@ -50,7 +55,9 @@ class ChoresCog(GuildCommandsMixin, commands.Cog):
     @app_commands.describe(
         name="Chore name, e.g. Change bedding",
         freq="How often it repeats",
-        weekday="Weekday (for weekly / monthly weekday)",
+        weekday="Weekday (for weekly / biweekly weekday / monthly weekday)",
+        biweekly_mode="Biweekly mode (for biweekly)",
+        start_date="Start date as YYYY-MM-DD (for biweekly)",
         nth="Which week of the month (for monthly weekday)",
         day_of_month="Day of the month, 1-31 (for monthly day)",
     )
@@ -58,45 +65,127 @@ class ChoresCog(GuildCommandsMixin, commands.Cog):
         self,
         interaction: discord.Interaction,
         name: app_commands.Range[str, 1, 50],
-        freq: Literal["Weekly", "Monthly weekday", "Monthly day"],
+        freq: Literal["Weekly", "Biweekly", "Monthly weekday", "Monthly day"],
         weekday: Literal[
             "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
         ] | None = None,
+        biweekly_mode: Literal["Every 14 days", "Every other weekday"] | None = None,
+        start_date: str | None = None,
         nth: Literal["First", "Second", "Third", "Fourth", "Last"] | None = None,
         day_of_month: app_commands.Range[int, 1, 31] | None = None,
     ):
         freq_raw = FREQ_MAP[freq]
         if freq_raw == "weekly":
-            if weekday is None or nth is not None or day_of_month is not None:
+            if (
+                weekday is None
+                or biweekly_mode is not None
+                or start_date is not None
+                or nth is not None
+                or day_of_month is not None
+            ):
                 await interaction.response.send_message(
                     "For a weekly chore, provide only the weekday.", ephemeral=True
                 )
                 return
-            dow, nth_v, dom = WEEKDAY_MAP[weekday], None, None
+            dow, nth_v, dom, biweekly_mode_v, start_date_v = (
+                WEEKDAY_MAP[weekday],
+                None,
+                None,
+                None,
+                None,
+            )
+        elif freq_raw == "biweekly":
+            if biweekly_mode is None or start_date is None or nth is not None or day_of_month is not None:
+                await interaction.response.send_message(
+                    "For a biweekly chore, provide mode and start date. Use weekday only for the 'Every other weekday' mode.",
+                    ephemeral=True,
+                )
+                return
+            try:
+                start_date_v = datetime.datetime.strptime(start_date, "%Y-%m-%d").date().isoformat()
+            except ValueError:
+                await interaction.response.send_message(
+                    "Start date must be in YYYY-MM-DD format.", ephemeral=True
+                )
+                return
+
+            biweekly_mode_v = BIWEEKLY_MODE_MAP[biweekly_mode]
+            if biweekly_mode_v == "every_14_days":
+                if weekday is not None:
+                    await interaction.response.send_message(
+                        "For biweekly 'Every 14 days', do not provide a weekday.",
+                        ephemeral=True,
+                    )
+                    return
+                dow = None
+            else:
+                if weekday is None:
+                    await interaction.response.send_message(
+                        "For biweekly 'Every other weekday', provide a weekday.",
+                        ephemeral=True,
+                    )
+                    return
+                dow = WEEKDAY_MAP[weekday]
+            nth_v, dom = None, None
         elif freq_raw == "monthly_nth":
-            if weekday is None or nth is None or day_of_month is not None:
+            if (
+                weekday is None
+                or biweekly_mode is not None
+                or start_date is not None
+                or nth is None
+                or day_of_month is not None
+            ):
                 await interaction.response.send_message(
                     "For a monthly weekday chore, provide the weekday and which week.", ephemeral=True
                 )
                 return
-            dow, nth_v, dom = WEEKDAY_MAP[weekday], NTH_MAP[nth], None
+            dow, nth_v, dom, biweekly_mode_v, start_date_v = (
+                WEEKDAY_MAP[weekday],
+                NTH_MAP[nth],
+                None,
+                None,
+                None,
+            )
         else:
-            if day_of_month is None or weekday is not None or nth is not None:
+            if (
+                biweekly_mode is not None
+                or start_date is not None
+                or day_of_month is None
+                or weekday is not None
+                or nth is not None
+            ):
                 await interaction.response.send_message(
                     "For a monthly day chore, provide only the day of the month.", ephemeral=True
                 )
                 return
-            dow, nth_v, dom = None, None, day_of_month
+            dow, nth_v, dom, biweekly_mode_v, start_date_v = (
+                None,
+                None,
+                day_of_month,
+                None,
+                None,
+            )
 
         member_id = await self._register(interaction)
         conn = await db.connect()
         try:
             await conn.execute(
                 """
-                INSERT INTO chores (guild_id, name, created_by, freq, day_of_week, nth, day_of_month)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO chores
+                (guild_id, name, created_by, freq, day_of_week, nth, day_of_month, biweekly_mode, start_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (interaction.guild_id, name.strip(), member_id, freq_raw, dow, nth_v, dom),
+                (
+                    interaction.guild_id,
+                    name.strip(),
+                    member_id,
+                    freq_raw,
+                    dow,
+                    nth_v,
+                    dom,
+                    biweekly_mode_v,
+                    start_date_v,
+                ),
             )
             await conn.commit()
         except Exception:
