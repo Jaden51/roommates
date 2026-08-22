@@ -21,6 +21,14 @@ async def _config_shares(
     members (largest-remainder rounding so shares always sum exactly)."""
     conn = await db.connect()
     cursor = await conn.execute(
+        "SELECT split_type FROM split_configs WHERE id = ?",
+        (split_config_id,),
+    )
+    config = await cursor.fetchone()
+    if config is None or config["split_type"] == "equal":
+        return _equal_shares(amount_cents, member_ids)
+
+    cursor = await conn.execute(
         "SELECT member_id, share_percent FROM split_shares WHERE config_id = ?",
         (split_config_id,),
     )

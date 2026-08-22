@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS split_configs (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     guild_id   INTEGER NOT NULL REFERENCES guilds(guild_id) ON DELETE CASCADE,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    changed_by INTEGER REFERENCES members(id)
+    changed_by INTEGER REFERENCES members(id),
+    split_type TEXT NOT NULL DEFAULT 'percent'
+               CHECK (split_type IN ('equal', 'percent', 'weight'))
 );
 
 CREATE TABLE IF NOT EXISTS split_shares (
@@ -36,6 +38,18 @@ CREATE TABLE IF NOT EXISTS split_shares (
     member_id     INTEGER NOT NULL REFERENCES members(id),
     share_percent REAL NOT NULL CHECK (share_percent > 0),
     PRIMARY KEY (config_id, member_id)
+);
+
+CREATE TABLE IF NOT EXISTS global_split_configs (
+    guild_id   INTEGER PRIMARY KEY REFERENCES guilds(guild_id) ON DELETE CASCADE,
+    config_id  INTEGER NOT NULL REFERENCES split_configs(id)
+);
+
+CREATE TABLE IF NOT EXISTS category_split_configs (
+    guild_id    INTEGER NOT NULL REFERENCES guilds(guild_id) ON DELETE CASCADE,
+    category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    config_id   INTEGER NOT NULL REFERENCES split_configs(id),
+    PRIMARY KEY (guild_id, category_id)
 );
 
 -- Pending split-change proposals, approved via the same all-members flow.
