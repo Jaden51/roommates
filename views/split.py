@@ -3,6 +3,7 @@ import json
 import discord
 
 import db.database as db
+from services.splits import set_global_config
 
 APPROVE_PREFIX = "split_approve"
 REJECT_PREFIX = "split_reject"
@@ -151,6 +152,7 @@ class SplitProposalView(discord.ui.View):
         votes = {r["voter_id"]: r["decision"] for r in await cursor.fetchall()}
 
         completed = all(mid in votes for mid in required)
+        approved_config_id: int | None = None
         if completed:
             rejected = any(votes.get(mid) == "rejected" for mid in required)
             if rejected:
@@ -173,9 +175,12 @@ class SplitProposalView(discord.ui.View):
                     "UPDATE split_proposals SET status = 'approved', config_id = ? WHERE id = ?",
                     (config_id, self.proposal_id),
                 )
+                approved_config_id = config_id
             for item in self.children:
                 item.disabled = True
         await conn.commit()
+        if approved_config_id is not None:
+            await set_global_config(prop["guild_id"], approved_config_id)
 
         record = await fetch_proposal(self.proposal_id)
         await interaction.response.send_message("Vote recorded.", ephemeral=True)

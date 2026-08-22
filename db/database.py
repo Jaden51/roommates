@@ -29,6 +29,7 @@ async def init_schema() -> None:
     schema = (config.BASE_DIR / "db" / "schema.sql").read_text()
     await conn.executescript(schema)
     await _migrate_chores_schema(conn)
+    await _migrate_split_schema(conn)
     await conn.commit()
 
 
@@ -87,6 +88,54 @@ async def _migrate_chores_schema(conn: aiosqlite.Connection) -> None:
             raise
     finally:
         await conn.execute("PRAGMA foreign_keys = ON")
+
+
+async def _migrate_split_schema(conn: aiosqlite.Connection) -> None:
+    cursor = await conn.execute("PRAGMA table_info(split_configs)")
+    columns = {column["name"] for column in await cursor.fetchall()}
+    if "split_type" not in columns:
+        await conn.execute(
+            """
+            ALTER TABLE split_configs
+            ADD COLUMN split_type TEXT NOT NULL DEFAULT 'percent'
+            CHECK (split_type IN ('equal', 'percent', 'weight'))
+            """
+        )
+
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS global_split_configs (
+            guild_id   INTEGER PRIMARY KEY REFERENCES guilds(guild_id) ON DELETE CASCADE,
+            config_id  INTEGER NOT NULL REFERENCES split_configs(id)
+        )
+        """
+    )
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS category_split_configs (
+            guild_id    INTEGER NOT NULL REFERENCES guilds(guild_id) ON DELETE CASCADE,
+            category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+            config_id   INTEGER NOT NULL REFERENCES split_configs(id),
+            PRIMARY KEY (guild_id, category_id)
+        )
+        """
+    )
+
+    cursor = await conn.execute("SELECT COUNT(*) AS n FROM global_split_configs")
+    has_globals = (await cursor.fetchone())["n"] > 0
+    if not has_globals:
+        cursor = await conn.execute(
+            """
+            SELECT guild_id, MAX(id) AS config_id
+            FROM split_configs
+            GROUP BY guild_id
+            """
+        )
+        for row in await cursor.fetchall():
+            await conn.execute(
+                "INSERT OR IGNORE INTO global_split_configs (guild_id, config_id) VALUES (?, ?)",
+                (row["guild_id"], row["config_id"]),
+            )
 
 
 async def get_guild_config(guild_id: int) -> aiosqlite.Row:

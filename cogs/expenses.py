@@ -8,7 +8,7 @@ from discord.ext import commands
 
 from cogs._common import GuildCommandsMixin
 import db.database as db
-from services.splits import get_active_config
+from services.splits import resolve_config
 from util import format_money, to_cents
 from views.approval import ExpenseApprovalView, build_expense_embed, fetch_expense
 
@@ -126,7 +126,7 @@ class ExpensesCog(GuildCommandsMixin, commands.Cog):
 
         month_key = await self._month_key(interaction)
         status = "approved" if not required else "pending"
-        config = await get_active_config(interaction.guild_id)
+        config = await resolve_config(interaction.guild_id, cat["id"])
         split_config_id = config["id"] if (config is not None and status == "approved") else None
         cursor = await conn.execute(
             """

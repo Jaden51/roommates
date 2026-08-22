@@ -17,8 +17,12 @@ Built with Python, discord.py, and SQLite. Self-hosted on your own machine.
 
 ### Customizable split
 
-- Set a global split — e.g. Alex 50%, Sam 50% (or 70/30, or 33/33/34) — with `/split set`.
-- Changing the split requires the same all-members approval flow.
+- Set a **global default split** for all expenses:
+  - percentages with `/split set` (approval flow),
+  - equal split with `/split set_equal`,
+  - fixed weights/shares with `/split set_weights`.
+- Set **category-specific overrides** with `/split category set`, `/split category set_equal`, or `/split category set_weights`.
+- Split resolution is: category override → global default → equal fallback.
 - Each expense is settled under the split that was in effect when it was approved, so mid-month changes don't rewrite history.
 
 ### Monthly statement
@@ -50,6 +54,14 @@ Built with Python, discord.py, and SQLite. Self-hosted on your own machine.
 | `/expense list [YYYY-MM]` | List a month's expenses |
 | `/split get` | Show the current split |
 | `/split set <member> <pct> [...]` | Propose a new split (requires approval) |
+| `/split set_equal` | Set global default to equal split |
+| `/split set_weights <member> <weight> [...]` | Set global fixed-weight split |
+| `/split clear` | Clear global split (falls back to equal) |
+| `/split category get <category>` | Show category split override |
+| `/split category set <category> <member> <pct> [...]` | Set category percentage override |
+| `/split category set_equal <category>` | Set category override to equal split |
+| `/split category set_weights <category> <member> <weight> [...]` | Set category fixed-weight override |
+| `/split category clear <category>` | Clear category split override |
 | `/chore create <name> <freq> [...]` | Create a recurring chore reminder |
 | `/chore list` | List chores |
 | `/chore delete <name>` | Delete a chore |
